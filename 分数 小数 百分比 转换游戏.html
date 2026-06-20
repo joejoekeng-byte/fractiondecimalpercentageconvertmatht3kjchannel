@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太空数学挑战 - 教学增强版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+        
+        body {
+            font-family: 'ZCOOL+KuaiLe', cursive, sans-serif;
+            background: #020617;
+            color: white;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #starfield {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%);
+        }
+
+        /* 方块卡片 */
+        .falling-card {
+            position: absolute;
+            cursor: pointer;
+            width: 110px;
+            z-index: 10;
+        }
+
+        .card-inner {
+            background: rgba(30, 41, 59, 0.95);
+            border: 3px solid #38bdf8;
+            border-radius: 1rem;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        /* 格子阵通用样式 */
+        .visual-grid {
+            display: grid;
+            gap: 1px;
+            background: rgba(255,255,255,0.1);
+            padding: 1px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .grid-10 { grid-template-columns: repeat(5, 1fr); width: 60px; }
+        .grid-100 { grid-template-columns: repeat(10, 1fr); width: 80px; }
+        
+        .grid-cell { background: rgba(0,0,0,0.3); }
+        .grid-10 .grid-cell { width: 10px; height: 10px; }
+        .grid-100 .grid-cell { width: 7px; height: 7px; }
+        .grid-cell.filled { background: #38bdf8; box-shadow: 0 0 4px #38bdf8; }
+
+        /* 练习模式 */
+        .practice-box {
+            background: rgba(15, 23, 42, 0.95);
+            border: 4px solid #f472b6;
+            border-radius: 2rem;
+            max-width: 550px;
+            width: 95%;
+            padding: 1.5rem;
+            box-shadow: 0 0 30px rgba(244, 114, 182, 0.3);
+        }
+
+        .fraction-input-container {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+        }
+        .fraction-line { width: 45px; height: 3px; background: white; margin: 4px 0; }
+        .math-input {
+            width: 60px; background: #1e293b; border: 2px solid #38bdf8;
+            border-radius: 8px; text-align: center; padding: 5px;
+            font-size: 1.2rem; color: white; outline: none;
+        }
+        .math-input:focus { border-color: #f472b6; }
+
+        /* 互动涂色格 */
+        .interactive-grid { display: grid; gap: 3px; margin: 0 auto; user-select: none; }
+        .i-grid-10 { grid-template-columns: repeat(5, 1fr); }
+        .i-grid-100 { grid-template-columns: repeat(10, 1fr); }
+        .i-cell { background: #334155; border: 1px solid #475569; cursor: pointer; transition: background 0.1s; }
+        .i-grid-10 .i-cell { width: 40px; height: 40px; }
+        .i-grid-100 .i-cell { width: 22px; height: 22px; }
+        .i-cell.active { background: #38bdf8; border-color: white; box-shadow: 0 0 8px #38bdf8; }
+
+        #task-panel { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; }
+        .task-box { background: #f472b6; padding: 8px 25px; border-radius: 999px; border: 3px solid white; box-shadow: 0 4px 15px rgba(244,114,182,0.4); }
+
+        .laser {
+            position: absolute; bottom: 100px; width: 4px;
+            background: linear-gradient(to top, #f472b6, transparent);
+            box-shadow: 0 0 10px #f472b6; pointer-events: none;
+        }
+
+        /* 选项勾选框样式 */
+        .option-chip {
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 2px solid #334155;
+        }
+        .option-chip.selected {
+            background: #f472b6;
+            border-color: white;
+            color: white;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="starfield"></canvas>
+
+    <!-- 初始菜单 -->
+    <div id="start-menu" class="fixed inset-0 flex flex-col items-center justify-center z-[300] bg-slate-950/90 backdrop-blur-lg">
+        <div class="text-6xl mb-4">🌌</div>
+        <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-pink-500 to-purple-600 mb-8 italic tracking-widest text-center">太空数学：十百之战</h1>
+        
+        <!-- 练习选项配置 -->
+        <div class="bg-slate-900/80 p-6 rounded-3xl border border-slate-700 mb-8 w-80 text-center">
+            <h3 class="text-slate-400 text-sm mb-4 uppercase tracking-tighter">练习模式配置</h3>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div id="opt-f" onclick="toggleOption('f')" class="option-chip selected p-2 rounded-xl text-sm font-bold">分数</div>
+                <div id="opt-v" onclick="toggleOption('v')" class="option-chip selected p-2 rounded-xl text-sm font-bold">小数</div>
+                <div id="opt-p" onclick="toggleOption('p')" class="option-chip selected p-2 rounded-xl text-sm font-bold">百分比</div>
+                <div id="opt-grid" onclick="toggleOption('grid')" class="option-chip selected p-2 rounded-xl text-sm font-bold">涂色图</div>
+            </div>
+            <p id="opt-error" class="text-red-500 text-xs hidden">请至少选择一个选项</p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 w-80">
+            <button onclick="checkAndStartPractice()" class="bg-blue-600 hover:bg-blue-500 p-5 rounded-3xl text-2xl font-bold shadow-xl transition-all transform hover:scale-105 active:scale-95 border-b-4 border-blue-800">
+                📖 基础练习模式
+                <div class="text-xs font-normal opacity-70 mt-1">10道题强化训练</div>
+            </button>
+            <button onclick="startGame()" class="bg-pink-600 hover:bg-pink-500 p-5 rounded-3xl text-2xl font-bold shadow-xl transition-all transform hover:scale-105 active:scale-95 border-b-4 border-pink-800">
+                🚀 太空挑战模式
+                <div class="text-xs font-normal opacity-70 mt-1">综合反应极限击破</div>
+            </button>
+        </div>
+    </div>
+
+    <!-- 练习模式界面 -->
+    <div id="practice-screen" class="fixed inset-0 hidden flex items-center justify-center z-[250] p-4">
+        <div class="practice-box text-center relative overflow-y-auto max-h-full">
+            <div class="flex justify-between items-center mb-4">
+                <div id="practice-progress" class="bg-slate-800 px-3 py-1 rounded-full text-xs text-pink-400 font-bold border border-pink-900/50">进度: 1/10</div>
+                <button onclick="backToMenu()" class="text-slate-500 hover:text-white text-2xl">✕</button>
+            </div>
+            
+            <h2 class="text-lg font-bold text-slate-400 mb-4 tracking-widest uppercase">转换练习柜</h2>
+            
+            <div id="practice-question" class="bg-slate-800/80 p-5 rounded-2xl mb-6 border border-slate-700 shadow-inner">
+                <!-- 题目内容 -->
+            </div>
+
+            <div id="practice-input-area" class="mb-6 flex flex-wrap justify-center items-center gap-6 min-h-[120px]">
+                <!-- 输入内容 -->
+            </div>
+
+            <div class="flex gap-4">
+                <button id="check-btn" onclick="checkPracticeAnswer()" class="flex-1 bg-green-600 p-4 rounded-xl font-bold text-xl hover:bg-green-500 shadow-lg border-b-4 border-green-800 transition-all">检查答案</button>
+                <button id="next-btn" onclick="nextPractice()" class="flex-1 bg-slate-700 p-4 rounded-xl font-bold text-xl hover:bg-slate-600 shadow-lg border-b-4 border-slate-800 hidden">下一题</button>
+            </div>
+            <div id="feedback" class="mt-4 h-6 font-bold text-lg"></div>
+        </div>
+    </div>
+
+    <!-- 结算/再挑战 -->
+    <div id="result-modal" class="fixed inset-0 hidden flex items-center justify-center z-[400] bg-black/90 backdrop-blur-sm">
+        <div class="bg-slate-900 border-4 border-blue-500 p-10 rounded-[3rem] text-center max-w-sm w-full">
+            <div class="text-6xl mb-4" id="result-icon">🏆</div>
+            <h2 class="text-3xl font-bold mb-2" id="result-title">练习完成</h2>
+            <p class="text-slate-400 mb-8" id="result-msg">你保护了数学星系！</p>
+            <div id="final-stats" class="mb-10"></div>
+            <div class="flex flex-col gap-4">
+                <button onclick="restartCurrentMode()" class="w-full bg-pink-600 p-5 rounded-2xl font-bold text-xl hover:bg-pink-500 transition-all border-b-4 border-pink-800">再挑战一次</button>
+                <button onclick="backToMenu()" class="w-full bg-slate-700 p-4 rounded-2xl font-bold text-lg hover:bg-slate-600 transition-all">回到基地</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏UI -->
+    <div id="game-ui" class="hidden">
+        <div class="fixed top-0 left-0 w-full p-4 flex justify-between items-center z-50">
+            <div class="bg-slate-800/90 px-4 py-2 rounded-2xl border border-slate-700">
+                <div class="text-[10px] text-slate-400">TIME</div>
+                <div id="timer" class="text-xl font-bold text-yellow-400">01:00</div>
+            </div>
+            <div id="score-display" class="bg-slate-800/90 px-4 py-2 rounded-2xl border border-slate-700 text-right">
+                <div class="text-[10px] text-slate-400">SCORE</div>
+                <div id="score" class="text-xl font-bold text-green-400">0</div>
+            </div>
+        </div>
+        <div id="game-area" class="relative w-full h-screen overflow-hidden">
+            <div id="task-panel">
+                <div id="target-display" class="task-box text-xl font-bold">?</div>
+                <div class="text-center text-5xl mt-2 animate-bounce">🛸</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const mathData = [
+            { v: 0.1, f: ["1","10"], p: "10", g: 10, fill: 1 },
+            { v: 0.2, f: ["2","10"], p: "20", g: 10, fill: 2 },
+            { v: 0.25, f: ["1","4"], p: "25", g: 100, fill: 25 },
+            { v: 0.3, f: ["3","10"], p: "30", g: 10, fill: 3 },
+            { v: 0.4, f: ["4","10"], p: "40", g: 10, fill: 4 },
+            { v: 0.5, f: ["1","2"], p: "50", g: 10, fill: 5 },
+            { v: 0.6, f: ["6","10"], p: "60", g: 100, fill: 60 },
+            { v: 0.7, f: ["7","10"], p: "70", g: 10, fill: 7 },
+            { v: 0.75, f: ["3","4"], p: "75", g: 100, fill: 75 },
+            { v: 0.8, f: ["4","5"], p: "80", g: 100, fill: 80 },
+            { v: 0.9, f: ["9","10"], p: "90", g: 10, fill: 9 },
+            { v: 1.0, f: ["1","1"], p: "100", g: 10, fill: 10 }
+        ];
+
+        let gameMode = '';
+        let practiceState = { target: null, type: '', filled: 0, count: 0, correctCount: 0 };
+        let selectedOptions = ['f', 'v', 'p', 'grid'];
+        let isDrawing = false;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSnd(f, t='sine', d=0.1) {
+            const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            o.type = t; o.frequency.value = f;
+            g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        }
+
+        // --- 菜单交互 ---
+        function toggleOption(opt) {
+            const el = document.getElementById('opt-' + opt);
+            if (selectedOptions.includes(opt)) {
+                if (selectedOptions.length > 1) {
+                    selectedOptions = selectedOptions.filter(o => o !== opt);
+                    el.classList.remove('selected');
+                } else {
+                    document.getElementById('opt-error').classList.remove('hidden');
+                    setTimeout(() => document.getElementById('opt-error').classList.add('hidden'), 2000);
+                }
+            } else {
+                selectedOptions.push(opt);
+                el.classList.add('selected');
+            }
+            playSnd(500, 'sine', 0.05);
+        }
+
+        function checkAndStartPractice() {
+            startPractice();
+        }
+
+        function restartCurrentMode() {
+            document.getElementById('result-modal').classList.add('hidden');
+            if (gameMode === 'practice') {
+                startPractice();
+            } else {
+                startGame();
+            }
+        }
+
+        // --- 练习模式 ---
+        function startPractice() {
+            document.getElementById('start-menu').classList.add('hidden');
+            document.getElementById('practice-screen').classList.remove('hidden');
+            gameMode = 'practice';
+            practiceState.count = 0;
+            practiceState.correctCount = 0;
+            nextPractice();
+        }
+
+        function nextPractice() {
+            if (practiceState.count >= 10) {
+                showFinalResult();
+                return;
+            }
+
+            practiceState.count++;
+            document.getElementById('practice-progress').innerText = `进度: ${practiceState.count}/10`;
+            document.getElementById('next-btn').classList.add('hidden');
+            document.getElementById('check-btn').classList.remove('hidden');
+            
+            const data = mathData[Math.floor(Math.random() * mathData.length)];
+            // 题目类型从选中的选项中产生，答案类型也从选中的选项中产生（除非只选了一个）
+            const qType = selectedOptions[Math.floor(Math.random() * selectedOptions.length)];
+            let possibleAns = selectedOptions.filter(t => t !== qType);
+            if (possibleAns.length === 0) {
+                // 如果只选了一个选项，则从全部类型里随机一个作为互换
+                possibleAns = ['f', 'v', 'p', 'grid'].filter(t => t !== qType);
+            }
+            const ansType = possibleAns[Math.floor(Math.random() * possibleAns.length)];
+            
+            const qDiv = document.getElementById('practice-question');
+            const inputDiv = document.getElementById('practice-input-area');
+            const feedback = document.getElementById('feedback');
+            feedback.innerText = ''; 
+            inputDiv.innerHTML = '';
+            
+            // 渲染题目
+            let qHtml = `<div class="text-xs text-slate-500 mb-1 uppercase tracking-widest">请转换</div>`;
+            if(qType === 'v') qHtml += `<span class="text-4xl text-blue-400 font-bold">${data.v}</span><div class="text-xs text-blue-300 mt-1">(小数)</div>`;
+            if(qType === 'p') qHtml += `<span class="text-4xl text-purple-400 font-bold">${data.p}%</span><div class="text-xs text-purple-300 mt-1">(百分比)</div>`;
+            if(qType === 'f') qHtml += `<div class="fraction-input-container"><span>${data.f[0]}</span><div class="fraction-line"></div><span>${data.f[1]}</span></div><div class="text-xs text-green-400 mt-1">(分数)</div>`;
+            if(qType === 'grid') {
+                const gridClass = data.g === 10 ? 'grid-10' : 'grid-100';
+                qHtml += `<div class="visual-grid ${gridClass} mx-auto mt-2">${Array.from({length:data.g}).map((_,i)=>`<div class="grid-cell ${i < data.fill ? 'filled' : ''}"></div>`).join('')}</div><div class="text-xs text-slate-400 mt-2">(${data.g}格阵)</div>`;
+            }
+            qDiv.innerHTML = qHtml;
+
+            practiceState.target = data;
+            practiceState.type = ansType;
+            practiceState.filled = 0;
+
+            // 渲染答案区
+            if(ansType === 'v') {
+                inputDiv.innerHTML = `<div class="flex items-center gap-2"><input type="number" step="0.01" id="ans-v" class="math-input" placeholder="0.0"> <span class="text-lg">小数</span></div>`;
+            } else if(ansType === 'p') {
+                inputDiv.innerHTML = `<div class="flex items-center gap-2"><input type="number" id="ans-p" class="math-input" placeholder="0"> <span class="text-2xl font-bold">%</span></div>`;
+            } else if(ansType === 'f') {
+                inputDiv.innerHTML = `<div class="fraction-input-container"><input type="text" id="ans-f-n" class="math-input" placeholder="?"><div class="fraction-line"></div><input type="text" id="ans-f-d" class="math-input" placeholder="?"></div>`;
+            } else if(ansType === 'grid') {
+                const gridClass = data.g === 10 ? 'i-grid-10' : 'i-grid-100';
+                inputDiv.innerHTML = `<div class="flex flex-col items-center"><div class="interactive-grid ${gridClass}" id="grid-canvas" onmousedown="isDrawing=true" onmouseup="isDrawing=false" onmouseleave="isDrawing=false">${Array.from({length:data.g}).map((_,i)=>`<div class="i-cell" onmouseover="handleHover(this)" onmousedown="handleHover(this, true)"></div>`).join('')}</div><div class="mt-4 text-[10px] text-slate-500 italic">点击或滑动涂色</div></div>`;
+            }
+        }
+
+        function handleHover(el, isClick = false) {
+            if (isDrawing || isClick) {
+                if (!el.classList.contains('active')) {
+                    el.classList.add('active');
+                    playSnd(600 + Math.random()*200, 'sine', 0.05);
+                } else if(isClick) {
+                    el.classList.remove('active');
+                }
+                practiceState.filled = document.querySelectorAll('.i-cell.active').length;
+            }
+        }
+
+        function checkPracticeAnswer() {
+            const data = practiceState.target;
+            const type = practiceState.type;
+            let correct = false;
+
+            if(type === 'v') {
+                correct = Math.abs(parseFloat(document.getElementById('ans-v').value) - data.v) < 0.01;
+            } else if(type === 'p') {
+                correct = document.getElementById('ans-p').value == data.p;
+            } else if(type === 'f') {
+                const n = document.getElementById('ans-f-n').value;
+                const d = document.getElementById('ans-f-d').value;
+                correct = (n == data.f[0] && d == data.f[1]);
+            } else if(type === 'grid') {
+                correct = (practiceState.filled === data.fill);
+            }
+
+            const feedback = document.getElementById('feedback');
+            if(correct) {
+                feedback.innerText = "⭐ 完美转换！";
+                feedback.className = "mt-4 h-6 font-bold text-lg text-green-400";
+                playSnd(880, 'sine', 0.2);
+                practiceState.correctCount++;
+            } else {
+                feedback.innerText = "❌ 还没对哦！正确答案是 " + (type==='p'?data.p+'%':(type==='v'?data.v:data.f[0]+'/'+data.f[1]));
+                feedback.className = "mt-4 h-6 font-bold text-lg text-red-400";
+                playSnd(200, 'sawtooth', 0.3);
+            }
+
+            document.getElementById('check-btn').classList.add('hidden');
+            document.getElementById('next-btn').classList.remove('hidden');
+        }
+
+        function showFinalResult() {
+            document.getElementById('practice-screen').classList.add('hidden');
+            document.getElementById('result-modal').classList.remove('hidden');
+            
+            const score = practiceState.correctCount;
+            let icon = "🎖️";
+            let msg = "练习完成，继续努力！";
+            if(score === 10) { icon = "🏆"; msg = "太厉害了！全对通关！"; }
+            else if(score >= 7) { icon = "⭐"; msg = "表现出色！你是数学小达人！"; }
+
+            document.getElementById('result-icon').innerText = icon;
+            document.getElementById('result-title').innerText = "练习成绩单";
+            document.getElementById('result-msg').innerText = msg;
+            document.getElementById('final-stats').innerHTML = `<div class="text-slate-500 text-sm uppercase">正确题数</div><div class="text-6xl font-black text-white">${score}/10</div>`;
+        }
+
+        // --- 挑战模式 ---
+        let cScore = 0; let cTime = 60; let cTarget = null; let cActive = false; let fSpeed = 1.2;
+
+        function startGame() {
+            document.getElementById('start-menu').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+            gameMode = 'challenge'; cActive = true; cScore = 0; cTime = 60; fSpeed = 1.2;
+            document.getElementById('score').innerText = "0";
+            setTarget(); spawn(); loop(); startClock();
+        }
+
+        function setTarget() {
+            cTarget = mathData[Math.floor(Math.random() * mathData.length)];
+            const modes = ['f', 'p', 'v']; const m = modes[Math.floor(Math.random()*3)];
+            let txt = m==='f' ? `${cTarget.f[0]}/${cTarget.f[1]}` : (m==='p' ? cTarget.p+'%' : cTarget.v);
+            document.getElementById('target-display').innerText = "寻找: " + txt;
+            playSnd(440, 'triangle', 0.2);
+        }
+
+        function spawn() {
+            if(!cActive) return;
+            const lane = Math.floor(Math.random()*4);
+            const isCorrect = Math.random() < 0.4;
+            const data = isCorrect ? cTarget : mathData[Math.floor(Math.random()*mathData.length)];
+            const types = ['fraction', 'decimal', 'percent', 'grid'];
+            const type = types[Math.floor(Math.random()*4)];
+
+            const card = document.createElement('div');
+            card.className = 'falling-card';
+            card.style.left = (lane * (window.innerWidth/4) + 15) + 'px';
+            card.style.top = '-150px';
+            
+            let content = '';
+            if(type === 'fraction') content = `<div class="font-bold text-xl">${data.f[0]}/${data.f[1]}</div>`;
+            else if(type === 'decimal') content = `<div class="text-2xl font-bold">${data.v}</div>`;
+            else if(type === 'percent') content = `<div class="text-2xl font-bold">${data.p}%</div>`;
+            else {
+                const gridClass = data.g === 10 ? 'grid-10' : 'grid-100';
+                content = `<div class="visual-grid ${gridClass}">${Array.from({length:data.g}).map((_,i)=>`<div class="grid-cell ${i < data.fill ? 'filled' : ''}"></div>`).join('')}</div>`;
+            }
+
+            card.innerHTML = `<div class="card-inner">${content}</div>`;
+            card.onclick = () => {
+                if(Math.abs(data.v - cTarget.v) < 0.01) {
+                    cScore += 100; document.getElementById('score').innerText = cScore;
+                    playSnd(1000, 'sine', 0.1); fire(card);
+                    card.style.opacity = '0'; card.style.transform = 'scale(2)';
+                    setTimeout(()=>card.remove(), 200);
+                    setTarget(); fSpeed += 0.03;
+                } else {
+                    playSnd(150, 'sawtooth', 0.2); card.querySelector('.card-inner').style.borderColor = 'red';
+                }
+            };
+            document.getElementById('game-area').appendChild(card);
+            setTimeout(spawn, Math.max(700, 2200 - cScore/8));
+        }
+
+        function fire(target) {
+            const r = target.getBoundingClientRect();
+            const l = document.createElement('div'); l.className = 'laser';
+            l.style.left = (r.left + r.width/2 - 2) + 'px';
+            l.style.height = (window.innerHeight - r.bottom - 40) + 'px';
+            document.getElementById('game-area').appendChild(l);
+            setTimeout(()=>l.remove(), 150);
+        }
+
+        function loop() {
+            if(!cActive) return;
+            document.querySelectorAll('.falling-card').forEach(c => {
+                let t = parseFloat(c.style.top); t += fSpeed; c.style.top = t + 'px';
+                if(t > window.innerHeight) c.remove();
+            });
+            requestAnimationFrame(loop);
+        }
+
+        function startClock() {
+            const itv = setInterval(() => {
+                cTime--;
+                document.getElementById('timer').innerText = `00:${cTime.toString().padStart(2,'0')}`;
+                if(cTime <= 0) { clearInterval(itv); endChallenge(); }
+            }, 1000);
+        }
+
+        function endChallenge() {
+            cActive = false;
+            document.getElementById('game-ui').classList.add('hidden');
+            document.getElementById('result-modal').classList.remove('hidden');
+            document.getElementById('result-icon').innerText = "🚀";
+            document.getElementById('result-title').innerText = "挑战结束";
+            document.getElementById('result-msg').innerText = "在有限时间内，你击落了大量错误核心！";
+            document.getElementById('final-stats').innerHTML = `<div class="text-slate-500 text-sm uppercase">总得分</div><div class="text-6xl font-black text-white">${cScore}</div>`;
+        }
+
+        function backToMenu() { location.reload(); }
+
+        const canvas = document.getElementById('starfield'); const ctx = canvas.getContext('2d');
+        function initStars() {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            ctx.fillStyle = "white";
+            for(let i=0; i<120; i++) {
+                ctx.beginPath(); ctx.arc(Math.random()*canvas.width, Math.random()*canvas.height, Math.random()*1.5, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        initStars();
+        window.onresize = initStars;
+    </script>
+</body>
+</html>
